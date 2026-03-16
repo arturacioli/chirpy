@@ -1,21 +1,36 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
 	"sync/atomic"
+
+	"github.com/arturacioli/chirpy/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db *database.Queries
 }
 
 func main(){
 	const PORT = "8081"
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	dbQueries := database.New(db)
+	if err != nil {
+		fmt.Print(err)	
+		os.Exit(1)
+	}
+
 	mux := new(http.ServeMux)
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
+		db: dbQueries,
 	}
 
 	homeHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
@@ -32,7 +47,7 @@ func main(){
 
 	fmt.Printf("Server running on port: %s\n", PORT)
 
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil{
 		fmt.Print(err)
 		os.Exit(1)

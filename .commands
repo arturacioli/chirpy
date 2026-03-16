@@ -1,0 +1,1 @@
+goose postgres postgres://arturacioli:@localhost:5432/chirpy up
