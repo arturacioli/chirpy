@@ -26,10 +26,18 @@ func (cfg *apiConfig) handlerMetricsPrinter(w http.ResponseWriter, r *http.Reque
 
 }
 func (cfg *apiConfig) handlerMetricsReset(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Store(int32(0))
+
 		header := w.Header()	
 		header.Add("Content-Type", "text/plain; charset=utf-8")
+
+		if cfg.platform != "dev"{
+			w.WriteHeader(403)
+			return
+		}
+
+		cfg.fileserverHits.Store(int32(0))
+		cfg.db.DeleteUsers(r.Context())
 		w.WriteHeader(200)
-		w.Write([]byte("Count reset to 0"))
+		w.Write([]byte("State reset to 0"))
 
 }
