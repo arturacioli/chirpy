@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"sync/atomic"
+
 	"github.com/joho/godotenv"
 
 	"github.com/arturacioli/chirpy/internal/database"
@@ -16,6 +18,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db *database.Queries
 	platform string
+	secret string
 }
 
 
@@ -24,7 +27,20 @@ func main(){
 	const PORT = "8081"
 
 	dbURL := os.Getenv("DB_URL")
+	if dbURL == ""{
+		log.Fatalf("db url env variable missing")
+	}
+	secret := os.Getenv("JWT_SECRET")
+	if secret == ""{
+		log.Fatalf("secret env variable missing")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == ""{
+		log.Fatalf("platform env variable missing")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
+
 	dbQueries := database.New(db)
 	if err != nil {
 		fmt.Print(err)	
@@ -35,7 +51,7 @@ func main(){
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
-		platform: os.Getenv("PLATFORM"),
+		platform: platform, 
 	}
 
 	homeHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
@@ -47,6 +63,8 @@ func main(){
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerMetricsReset)
 
 	mux.HandleFunc("POST /api/users", apiCfg.HandleCreateUser)
+
+	mux.HandleFunc("POST /api/login", apiCfg.HandlerLogin)
 	
 	mux.HandleFunc("POST /api/chirps", apiCfg.HandleCreateChirp)
 	mux.HandleFunc("GET /api/chirps", apiCfg.HandleGetChirps)

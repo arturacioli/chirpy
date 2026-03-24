@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/arturacioli/chirpy/internal/auth"
 	"github.com/arturacioli/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -15,21 +16,33 @@ import (
 func (cfg *apiConfig)HandleCreateChirp(w http.ResponseWriter, r *http.Request){
 	type reqVal struct{
 		Body string `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
 	}
 	decoder := json.NewDecoder(r.Body) 
 	params := reqVal{}
 	err := decoder.Decode(&params)
-
 	if err != nil{
 		log.Printf("Error decoding params: %s\n",err)
 		respondWithError(w, 500,"Something went wrong")
 		return
 	}
+
+	token,err := auth.GetBearerToken(r.Header)
+	if err != nil{
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	id, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil{
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
 	if len(params.Body) > 140 {
 		respondWithError(w,400,"Chirp too long")
 		return
 	}
+
 	if params.Body == "" {
 		respondWithError(w, 400, "Body is required")
 		return
@@ -37,7 +50,7 @@ func (cfg *apiConfig)HandleCreateChirp(w http.ResponseWriter, r *http.Request){
 
 	createChirpParams := database.CreateChirpParams{
 		Body: profaneFilter(params.Body),
-		UserID: params.UserId,
+		UserID: id,
 	}
 	chirp, err := cfg.db.CreateChirp(r.Context(),createChirpParams)
 	if err != nil{
