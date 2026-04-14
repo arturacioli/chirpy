@@ -10,6 +10,9 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+
+
 func (cfg *apiConfig) handlerMetricsPrinter(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()	
 		header.Add("Content-Type", "text/html; charset=utf-8")

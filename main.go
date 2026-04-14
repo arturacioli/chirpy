@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/arturacioli/chirpy/internal/auth"
 	"github.com/arturacioli/chirpy/internal/database"
 	_ "github.com/lib/pq"
 )
@@ -19,6 +21,7 @@ type apiConfig struct {
 	db *database.Queries
 	platform string
 	secret string
+	apiKey string
 }
 
 
@@ -38,6 +41,10 @@ func main(){
 	if platform == ""{
 		log.Fatalf("platform env variable missing")
 	}
+	apiKey := os.Getenv("API_KEY")
+	if apiKey == ""{
+		log.Fatalf("api key env variable missing")
+	}
 
 	db, err := sql.Open("postgres", dbURL)
 
@@ -52,6 +59,7 @@ func main(){
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
 		platform: platform, 
+		apiKey: apiKey,
 	}
 
 	homeHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
@@ -63,12 +71,20 @@ func main(){
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerMetricsReset)
 
 	mux.HandleFunc("POST /api/users", apiCfg.HandleCreateUser)
+	mux.HandleFunc("PUT /api/users", apiCfg.HandlerEditUser)
 
 	mux.HandleFunc("POST /api/login", apiCfg.HandlerLogin)
 	
-	mux.HandleFunc("POST /api/chirps", apiCfg.HandleCreateChirp)
+	mux.HandleFunc("POST /api/chirps", apiCfg.middlewareAuth(apiCfg.HandleCreateChirp))
 	mux.HandleFunc("GET /api/chirps", apiCfg.HandleGetChirps)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.HandleGetSingleChirp)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.middlewareAuth(apiCfg.HandleDeleteChirp))
+
+	mux.HandleFunc("POST /api/refresh", apiCfg.HandlerRefresh)
+	mux.HandleFunc("POST /api/revoke", apiCfg.HandlerRevoke)
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.middlewareApiAuth(apiCfg.HandleWebHook))
+
 
 	server := http.Server{
 		Addr: ":" + PORT,	
@@ -84,3 +100,39 @@ func main(){
 	}
 
 }
+
+func (cfg *apiConfig) middlewareAuth(next http.HandlerFunc) http.HandlerFunc{
+
+	return func(w http.ResponseWriter, r *http.Request){
+		token,err := auth.GetBearerToken(r.Header)
+		if err != nil{
+			respondWithError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		id, err := auth.ValidateJWT(token, cfg.secret)
+		if err != nil{
+			respondWithError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		
+		ctx := context.WithValue(r.Context(), "userId", id)
+		next(w, r.WithContext(ctx))
+
+	}
+}
+
+func (cfg *apiConfig) middlewareApiAuth(next http.HandlerFunc) http.HandlerFunc{
+
+	return func(w http.ResponseWriter, r *http.Request){
+		token,err := auth.GetApiKey(r.Header)
+		if err != nil || token != cfg.apiKey{
+			respondWithError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		next(w, r)
+
+	}
+}
+

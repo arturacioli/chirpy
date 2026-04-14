@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/arturacioli/chirpy/internal/auth"
+	"github.com/arturacioli/chirpy/internal/database"
 )
 
 func (cfg *apiConfig)HandlerLogin(w http.ResponseWriter, r *http.Request){
 	reqBody := struct{
 		Email string `json:"email"`
 		Password string `json:"password"`
-		ExpiresInSeconds int `json:"expires_in_seconds"`
 	}{}
 
 	decoder := json.NewDecoder(r.Body)
@@ -50,12 +50,18 @@ func (cfg *apiConfig)HandlerLogin(w http.ResponseWriter, r *http.Request){
 
 	expirationTime := time.Hour
 
-	if reqBody.ExpiresInSeconds > 0 && reqBody.ExpiresInSeconds < 3600 {
-	    expirationTime = time.Duration(reqBody.ExpiresInSeconds) * time.Second
-	}
 	token, err := auth.MakeJwt(user.ID, cfg.secret, expirationTime)
 	if err != nil{
 		log.Printf("Error creating JWT: %v\n",err)
+		respondWithError(w, http.StatusInternalServerError, "Internal error")
+	}
+
+	refreshToken := auth.MakeRefreshToken()
+	savedRToken,err := cfg.db.CreateRefreshToken(r.Context(),database.CreateRefreshTokenParams{
+		Token: refreshToken,
+		UserID: user.ID,
+	})
+	if err != nil{
 		respondWithError(w, http.StatusInternalServerError, "Internal error")
 	}
 
@@ -65,6 +71,8 @@ func (cfg *apiConfig)HandlerLogin(w http.ResponseWriter, r *http.Request){
 		UpdatedAt: user.UpdatedAt,
 		Email: user.Email,
 		Token: token,
+		RefreshToken: savedRToken.Token,
+		IsChirpyRed: user.IsChirpyRed.Bool,
 	})
 
 

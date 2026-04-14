@@ -21,7 +21,7 @@ func respondWithError(w http.ResponseWriter, code int, msg string){
 	w.Write(dat)
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}){
+func respondWithJSON(w http.ResponseWriter, code int, payload any){
 	dat,err := json.Marshal(payload)
 	if err != nil{
 		log.Printf("Error marshalling ")

@@ -30,7 +30,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error){
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&claims,
-		func(token *jwt.Token) (interface{}, error){
+		func(token *jwt.Token) (any, error){
 			return []byte(tokenSecret), nil
 		},
 	)

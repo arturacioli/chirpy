@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/arturacioli/chirpy/internal/auth"
 	"github.com/arturacioli/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -25,21 +24,8 @@ func (cfg *apiConfig)HandleCreateChirp(w http.ResponseWriter, r *http.Request){
 		respondWithError(w, 500,"Something went wrong")
 		return
 	}
-
-	token,err := auth.GetBearerToken(r.Header)
-	if err != nil{
-		respondWithError(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	id, err := auth.ValidateJWT(token, cfg.secret)
-	if err != nil{
-		respondWithError(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
 	if len(params.Body) > 140 {
-		respondWithError(w,400,"Chirp too long")
+		respondWithError(w, 400, "Chirp too long")
 		return
 	}
 
@@ -50,7 +36,7 @@ func (cfg *apiConfig)HandleCreateChirp(w http.ResponseWriter, r *http.Request){
 
 	createChirpParams := database.CreateChirpParams{
 		Body: profaneFilter(params.Body),
-		UserID: id,
+		UserID: r.Context().Value("userId").(uuid.UUID),
 	}
 	chirp, err := cfg.db.CreateChirp(r.Context(),createChirpParams)
 	if err != nil{
@@ -87,7 +73,14 @@ func profaneFilter(s string) string{
 }
 
 func (cfg *apiConfig)HandleGetChirps(w http.ResponseWriter, r *http.Request){
+
+	if r.URL.Query().Get("author_id") != ""{
+
+
+	}
+
 	chirps, err := cfg.db.GetChirps(r.Context())
+
 	if err != nil{
 		respondWithError(w, http.StatusInternalServerError, "Error getting chirps")
 	}
